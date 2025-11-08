@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,7 +58,7 @@ export default function UploadPage() {
       let data;
       try {
         data = await response.json();
-      } catch (jsonError) {
+      } catch {
         throw new Error('Server returned an invalid response. Please try again.');
       }
 

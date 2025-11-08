@@ -668,7 +668,7 @@ export default function SummaryPage() {
                       <div>
                         <CardTitle className="text-2xl mb-2">Trusted Trade Partners</CardTitle>
                         <CardDescription className="text-sm leading-relaxed">
-                          Share your information with specialists who can help with the work we won't be doing.
+                          Share your information with specialists who can help with the work we&apos;ll not be doing.
                         </CardDescription>
                       </div>
                       <button

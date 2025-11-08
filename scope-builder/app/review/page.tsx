@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -724,6 +724,7 @@ export default function ReviewPage() {
 interface SignatureModalProps {
   homeownerName: string;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  // eslint-disable-next-line no-unused-vars
   onSave: (signatureImage: string) => void;
   onCancel: () => void;
 }

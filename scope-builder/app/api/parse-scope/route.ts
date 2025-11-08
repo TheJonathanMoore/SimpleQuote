@@ -94,7 +94,7 @@ Output the result as a JSON object with this exact structure:
         {
           "id": "unique-item-id-3",
           "quantity": "120 LF",
-          "description": "Replace 5\" K-style gutters",
+          "description": "Replace 5 inch K-style gutters",
           "rcv": 1200.00,
           "checked": true,
           "notes": ""
