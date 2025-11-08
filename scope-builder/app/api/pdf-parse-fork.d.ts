@@ -1,4 +1,5 @@
 declare module 'pdf-parse-fork' {
+  // eslint-disable-next-line no-unused-vars
   function parse(_dataBuffer: Buffer): Promise<{
     numpages: number;
     numrender: number;
