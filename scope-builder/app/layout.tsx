@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Scope Builder - Insurance Document Parser",
-  description: "AI-powered scope builder for construction insurance documents",
+  title: "SimpleQuote - Insurance Document Parser",
+  description: "AI-powered insurance document parser for construction scope extraction",
 };
 
 export default function RootLayout({

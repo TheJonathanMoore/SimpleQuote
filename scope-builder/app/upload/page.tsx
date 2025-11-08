@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -94,9 +95,22 @@ export default function UploadPage() {
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-2xl mx-auto">
-        <header className="mb-8">
+        <header className="mb-8 text-center">
+          <div className="mb-4 flex justify-center">
+            <svg width="120" height="100" viewBox="0 0 1000 900" xmlns="http://www.w3.org/2000/svg">
+              {/* Dark Blue Arrow Mark */}
+              <g id="arrow-mark">
+                {/* Left triangle */}
+                <polygon points="330,250 400,400 330,400" fill="#1a3a52"/>
+                {/* Middle parallelogram */}
+                <polygon points="420,250 550,250 480,400 420,400" fill="#1a3a52"/>
+                {/* Right parallelogram */}
+                <polygon points="570,250 700,250 630,400 570,400" fill="#1a3a52"/>
+              </g>
+            </svg>
+          </div>
           <h1 className="text-4xl font-bold tracking-tight mb-2">
-            Scope Builder
+            SimpleQuote
           </h1>
           <p className="text-muted-foreground">
             AI-powered insurance document parser for construction scope extraction
