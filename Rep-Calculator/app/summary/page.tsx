@@ -274,9 +274,9 @@ export default function SummaryPage() {
         yPosition += 3;
       }
 
+      pdfDoc.setFontSize(8);
       pdfDoc.text(`Generated: ${new Date().toLocaleDateString()}`, margin, pageHeight - 5, {
         align: 'left',
-        fontSize: 8,
       });
 
       pdfDoc.save('scope-summary.pdf');
