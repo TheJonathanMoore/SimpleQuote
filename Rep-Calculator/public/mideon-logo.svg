@@ -1,0 +1,17 @@
+<svg viewBox="0 0 1000 900" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark Blue Arrow Mark -->
+  <g id="arrow-mark">
+    <!-- Left triangle -->
+    <polygon points="330,250 400,400 330,400" fill="#1a3a52"/>
+    <!-- Middle parallelogram -->
+    <polygon points="420,250 550,250 480,400 420,400" fill="#1a3a52"/>
+    <!-- Right parallelogram -->
+    <polygon points="570,250 700,250 630,400 570,400" fill="#1a3a52"/>
+  </g>
+
+  <!-- MIDEON Text -->
+  <text x="50" y="620" font-family="Arial, sans-serif" font-size="280" font-weight="bold" fill="#888888" letter-spacing="8">MIDEON</text>
+
+  <!-- EXTERIORS Text -->
+  <text x="150" y="800" font-family="Arial, sans-serif" font-size="140" font-weight="bold" fill="#888888" letter-spacing="4">EXTERIORS</text>
+</svg>
