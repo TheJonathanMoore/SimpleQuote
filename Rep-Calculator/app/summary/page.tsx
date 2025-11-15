@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 interface LineItem {
