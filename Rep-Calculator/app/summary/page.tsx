@@ -43,7 +43,6 @@ export default function SummaryPage() {
   const [expandedTrades, setExpandedTrades] = useState<Set<string>>(new Set());
   const [workDoingSummary, setWorkDoingSummary] = useState<string>('');
   const [workNotDoingSummary, setWorkNotDoingSummary] = useState<string>('');
-  const [summaryLoading, setSummaryLoading] = useState(false);
   const [customer, setCustomer] = useState<{ displayName: string; address: string; jnid: string } | null>(null);
   const [sendingToJobNimbus, setSendingToJobNimbus] = useState(false);
   const [sendingError, setSendingError] = useState<string>('');
@@ -331,7 +330,6 @@ export default function SummaryPage() {
       const maxWidth = pageWidth - 2 * margin;
       let yPosition = margin;
       const lineHeight = 5;
-      const fontSize = 10;
 
       pdf.setFontSize(16);
       pdf.text('Scope of Work Summary', margin, yPosition);

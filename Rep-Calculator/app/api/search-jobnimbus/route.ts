@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-interface JobNimbusContact {
-  id: string;
-  displayName: string;
-  address?: string;
-  jnid?: string;
-}
-
 interface SearchResult {
   id: string;
   displayName: string;
