@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd Rep-Calculator && npm run build",
-  "devCommand": "cd Rep-Calculator && npm run dev",
-  "installCommand": "cd Rep-Calculator && npm install"
+  "root": "Rep-Calculator",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev"
 }
