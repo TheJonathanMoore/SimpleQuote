@@ -253,7 +253,7 @@ export default function SummaryPage() {
           yPosition = margin;
         }
 
-        pdfDoc.text(`${trade.name} - RCV: $${tradeTotals[trade.name]?.rcv || 0}`, margin, yPosition);
+        pdfDoc.text(`${trade.name} - Total Insurance Coverage: $${tradeTotals[trade.name]?.rcv || 0}`, margin, yPosition);
         yPosition += lineHeight;
 
         for (const item of trade.lineItems) {
@@ -406,7 +406,7 @@ export default function SummaryPage() {
           yPosition = margin;
         }
 
-        pdf.text(`${trade.name} - RCV: $${tradeTotals[trade.name]?.rcv || 0}`, margin, yPosition);
+        pdf.text(`${trade.name} - Total Insurance Coverage: $${tradeTotals[trade.name]?.rcv || 0}`, margin, yPosition);
         yPosition += lineHeight;
 
         for (const item of trade.lineItems) {
@@ -590,9 +590,9 @@ export default function SummaryPage() {
                         <h3 className="text-xl font-semibold">{trade.name}</h3>
                       </div>
                       <div className="flex gap-4 text-lg font-mono">
-                        <span>RCV: ${tradeTotals[trade.name]?.rcv.toLocaleString() || 0}</span>
+                        <span>Total Insurance Coverage: ${tradeTotals[trade.name]?.rcv.toLocaleString() || 0}</span>
                         {tradeTotals[trade.name]?.acv > 0 && (
-                          <span>ACV: ${tradeTotals[trade.name]?.acv.toLocaleString()}</span>
+                          <span>Total Upfront Money: ${tradeTotals[trade.name]?.acv.toLocaleString()}</span>
                         )}
                       </div>
                     </button>
