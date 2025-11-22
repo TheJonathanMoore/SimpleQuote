@@ -133,24 +133,15 @@ export default function UploadPage() {
     });
 
     if (!extractResponse.ok) {
-      let errorMessage = 'Failed to extract text from PDF';
-      try {
-        const errorData = await extractResponse.json();
-        errorMessage = errorData.error || errorMessage;
-      } catch {
-        const errorText = await extractResponse.text();
-        console.error('Extraction API error response:', errorText);
-        errorMessage = `Server error (${extractResponse.status}): ${errorText.substring(0, 100)}`;
-      }
-      throw new Error(errorMessage);
+      console.error('Extraction API error, status:', extractResponse.status);
+      throw new Error(`Failed to extract text from PDF (HTTP ${extractResponse.status})`);
     }
 
     let extractedData;
     try {
       extractedData = await extractResponse.json();
     } catch (e) {
-      const text = await extractResponse.text();
-      console.error('Failed to parse extraction response:', text.substring(0, 500));
+      console.error('Failed to parse extraction response:', e);
       throw new Error('Invalid response from extraction API');
     }
 
@@ -206,7 +197,7 @@ export default function UploadPage() {
     }
   };
 
-  const handleParse = async () => {
+  const handleRead = async () => {
     if (inputMode === 'file' && !file) {
       setError('Please upload a PDF file');
       return;
@@ -221,19 +212,19 @@ export default function UploadPage() {
     setError('');
 
     try {
-      let textToParse = '';
+      let textToRead = '';
 
       if (inputMode === 'file' && file) {
         // Extract text from file first
-        textToParse = await extractTextFromFile(file);
+        textToRead = await extractTextFromFile(file);
       } else {
         // Use text input directly
-        textToParse = insuranceText;
+        textToRead = insuranceText;
       }
 
-      // Now parse the extracted/provided text
+      // Now analyze the extracted/provided text
       const formData = new FormData();
-      formData.append('text', textToParse);
+      formData.append('text', textToRead);
 
       const response = await fetch('/api/parse-scope', {
         method: 'POST',
@@ -468,12 +459,12 @@ export default function UploadPage() {
             </div>
 
             <Button
-              onClick={handleParse}
+              onClick={handleRead}
               disabled={loading || extracting}
               className="w-full"
               size="lg"
             >
-              {extracting ? 'Extracting text...' : loading ? 'Parsing...' : 'Parse Document'}
+              {extracting ? 'Extracting text...' : loading ? 'Reading...' : 'Read Document'}
             </Button>
           </CardContent>
         </Card>
