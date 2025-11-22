@@ -21,11 +21,9 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [insuranceText, setInsuranceText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [extracting, setExtracting] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState('');
   const [error, setError] = useState('');
   const [inputMode, setInputMode] = useState<'file' | 'text'>('file');
-  const [quality, setQuality] = useState<'fast' | 'better'>('better');
   const [selectedRep, setSelectedRep] = useState('Colin Black');
   const [customerSearch, setCustomerSearch] = useState('');
   const [searchResults, setSearchResults] = useState<JobNimbusCustomer[]>([]);
@@ -336,48 +334,13 @@ export default function UploadPage() {
                 <Button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={extracting || file !== null}
+                  disabled={file !== null}
                   variant="outline"
                   className="w-full"
                   size="lg"
                 >
                   📁 Choose PDF File
                 </Button>
-
-                <div className="space-y-2">
-                  <Label>Extraction Quality</Label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="quality"
-                        value="fast"
-                        checked={quality === 'fast'}
-                        onChange={(e) => setQuality(e.target.value as 'fast' | 'better')}
-                        disabled={extracting}
-                        className="cursor-pointer"
-                      />
-                      <span className="text-sm">Fast (Basic)</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="quality"
-                        value="better"
-                        checked={quality === 'better'}
-                        onChange={(e) => setQuality(e.target.value as 'fast' | 'better')}
-                        disabled={extracting}
-                        className="cursor-pointer"
-                      />
-                      <span className="text-sm">Better (Recommended)</span>
-                    </label>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {quality === 'fast'
-                      ? 'Fast mode: Quick text extraction, good for printed documents'
-                      : 'Better mode: Advanced OCR, better accuracy for scanned documents'}
-                  </p>
-                </div>
 
                 {extractionStatus && (
                   <div className="text-sm text-blue-600">
