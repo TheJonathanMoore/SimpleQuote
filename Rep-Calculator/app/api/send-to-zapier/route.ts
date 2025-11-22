@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { writeFile } from 'fs/promises';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,9 +16,32 @@ export async function POST(request: NextRequest) {
       base64String = base64String.split(',')[1];
     }
 
-    // Prepare payload for Zapier with base64 file content directly
+    // Create temp directory if it doesn't exist
+    const tempDir = path.join(process.cwd(), 'tmp-pdfs');
+    try {
+      await fs.mkdir(tempDir, { recursive: true });
+    } catch (error) {
+      console.log('Temp directory already exists or could not create');
+    }
+
+    // Save the PDF file temporarily
+    const timestamp = Date.now();
+    const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filepath = path.join(tempDir, `${timestamp}_${safeFilename}`);
+
+    // Decode base64 to binary
+    const binaryBuffer = Buffer.from(base64String, 'base64');
+    await writeFile(filepath, binaryBuffer);
+
+    console.log('PDF saved to:', filepath);
+
+    // Create a public URL for the file - use environment variable for app URL
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const fileUrl = `${appUrl}/api/send-to-zapier/get-pdf/${timestamp}/${safeFilename}`;
+
+    // Prepare payload for Zapier with file URL
     const zapierPayload = {
-      file: base64String,
+      file_url: fileUrl,
       filename,
       related_id,
       attachment_type,
@@ -27,9 +51,10 @@ export async function POST(request: NextRequest) {
     // Forward to Zapier webhook
     const zapierWebhookUrl = 'https://hooks.zapier.com/hooks/catch/24628620/u8ekbpf/';
 
-    console.log('Forwarding to Zapier webhook with base64 PDF content...');
+    console.log('Forwarding to Zapier webhook with file URL...');
     console.log('Filename:', filename);
     console.log('Related ID (JNID):', related_id);
+    console.log('File URL:', fileUrl);
     console.log('Attachment Type:', attachment_type);
     console.log('Description:', description);
 
@@ -57,6 +82,7 @@ export async function POST(request: NextRequest) {
       message: 'Document sent to JobNimbus via Zapier',
       filename,
       related_id,
+      file_url: fileUrl,
     });
   } catch (error) {
     console.error('Error sending to Zapier:', error);
@@ -71,7 +97,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const pathname = request.nextUrl.pathname;
-    const parts = pathname.split('/api/get-pdf/')[1].split('/');
+    const parts = pathname.split('/api/send-to-zapier/get-pdf/')[1].split('/');
     const timestamp = parts[0];
     const safeFilename = parts.slice(1).join('/');
 
