@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SimpleQuote - Insurance Document Parser",
+  title: "Rep Calculator - Insurance Document Parser",
   description: "AI-powered insurance document parser for construction scope extraction",
 };
 

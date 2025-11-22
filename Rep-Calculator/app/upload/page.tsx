@@ -228,7 +228,7 @@ export default function UploadPage() {
             </svg>
           </div>
           <h1 className="text-4xl font-bold tracking-tight mb-2">
-            SimpleQuote
+            Rep Calculator
           </h1>
           <p className="text-muted-foreground">
             AI-powered insurance document parser for construction scope extraction
