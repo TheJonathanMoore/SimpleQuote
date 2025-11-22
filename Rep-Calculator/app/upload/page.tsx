@@ -109,53 +109,69 @@ export default function UploadPage() {
   };
 
   const extractTextFromPDF = async (fileToProcess: File): Promise<string> => {
-    // Read file as base64
-    const reader = new FileReader();
-    const base64File = await new Promise<string>((resolve, reject) => {
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(fileToProcess);
-    });
-
-    // Call extraction API
-    const extractResponse = await fetch('/api/extract-text', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        file: base64File,
-        filename: fileToProcess.name,
-      }),
-    });
-
-    if (!extractResponse.ok) {
-      console.error('Extraction API error, status:', extractResponse.status);
-      throw new Error(`Failed to extract text from PDF (HTTP ${extractResponse.status})`);
-    }
-
-    let extractedData;
     try {
-      extractedData = await extractResponse.json();
-    } catch (e) {
-      console.error('Failed to parse extraction response:', e);
-      throw new Error('Invalid response from extraction API');
-    }
+      // Import pdfjs dynamically
+      const pdfjsLib = await import('pdfjs-dist');
+      const pdfjs = pdfjsLib.default || pdfjsLib;
 
-    if (!extractedData.success && extractedData.requiresOCR) {
-      // Scanned PDF - switch to OCR
-      setExtractionStatus('PDF is scanned. Switching to OCR...');
+      // Set up worker
+      pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+
+      setExtractionStatus('Loading PDF...');
+
+      // Read file as ArrayBuffer
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(fileToProcess);
+      });
+
+      setExtractionStatus('Extracting text from PDF...');
+
+      // Load PDF document
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      let hasImages = false;
+
+      // Extract text from each page
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => (item.str || ''))
+          .join(' ');
+        fullText += pageText + '\n';
+
+        // Check for images (scanned document indicator)
+        try {
+          const operatorList = await page.getOperatorList();
+          if (pdfjs.OPS && operatorList.fnArray.includes(pdfjs.OPS.paintInlineImageXObject)) {
+            hasImages = true;
+          }
+        } catch {
+          // Skip if check fails
+        }
+      }
+
+      // If mostly images (scanned PDF), fall back to OCR
+      if (hasImages && fullText.trim().length < 100) {
+        setExtractionStatus('PDF is scanned. Switching to OCR...');
+        return await extractTextFromImage(fileToProcess);
+      }
+
+      if (!fullText.trim()) {
+        setExtractionStatus('PDF is scanned. Switching to OCR...');
+        return await extractTextFromImage(fileToProcess);
+      }
+
+      return fullText;
+    } catch (err) {
+      console.error('PDF extraction failed:', err);
+      // Fall back to OCR for any errors
+      setExtractionStatus('PDF extraction failed. Switching to OCR...');
       return await extractTextFromImage(fileToProcess);
     }
-
-    if (!extractedData.text) {
-      throw new Error('No text could be extracted from the document');
-    }
-
-    return extractedData.text;
   };
 
   const extractTextFromImage = async (fileToProcess: File): Promise<string> => {
@@ -223,6 +239,7 @@ export default function UploadPage() {
       }
 
       // Now analyze the extracted/provided text
+      // Send directly to parse-scope API (no intermediate processing needed)
       const formData = new FormData();
       formData.append('text', textToRead);
 

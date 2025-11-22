@@ -1,102 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 interface ExtractionRequest {
-  file: string; // base64 encoded file
+  text: string; // Already extracted text from client-side
   filename: string;
 }
 
+/**
+ * This endpoint receives pre-extracted text from the client.
+ * All extraction (PDF and OCR) happens client-side to avoid Node.js DOM API issues.
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ExtractionRequest;
-    const { file: base64File, filename } = body;
+    const { text, filename } = body;
 
-    // Decode base64 to buffer
-    let base64String = base64File;
-    if (base64String.startsWith('data:')) {
-      base64String = base64String.split(',')[1];
-    }
-
-    const fileBuffer = Buffer.from(base64String, 'base64');
-    const isPDF = filename.toLowerCase().endsWith('.pdf');
-
-    let extractedText = '';
-
-    if (isPDF) {
-      // For PDFs, extract text using pdfjs
-      extractedText = await extractTextFromPDF(fileBuffer);
-    } else {
-      // For images, return a message that client-side OCR is needed
-      return NextResponse.json({
-        success: false,
-        requiresOCR: true,
-        message: 'Image files require client-side OCR processing',
-      });
+    if (!text || text.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'No text to process' },
+        { status: 400 }
+      );
     }
 
     // Clean up the text
-    const cleanedText = cleanExtractedText(extractedText);
+    const cleanedText = cleanExtractedText(text);
 
     return NextResponse.json({
       success: true,
       text: cleanedText,
       filename,
-      sourceType: 'pdf',
+      sourceType: 'extracted',
     });
   } catch (error) {
-    console.error('Error extracting text:', error);
+    console.error('Error processing text:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to extract text' },
+      { error: error instanceof Error ? error.message : 'Failed to process text' },
       { status: 500 }
     );
-  }
-}
-
-async function extractTextFromPDF(
-  buffer: Buffer
-): Promise<string> {
-  try {
-    // Dynamically import pdfjs to avoid DOMMatrix issues at build time
-    const pdfjs = await import('pdfjs-dist');
-
-    // Set up the worker for pdfjs
-    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-
-    // Extract text from PDF using pdfjs
-    const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
-    let fullText = '';
-    let hasImages = false;
-
-    for (let i = 0; i < pdf.numPages; i++) {
-      const page = await pdf.getPage(i + 1);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-
-      fullText += pageText + '\n';
-
-      // Check if page has images (scanned document indicator)
-      const operatorList = await page.getOperatorList();
-      if (operatorList.fnArray.includes(pdfjs.OPS.paintInlineImageXObject)) {
-        hasImages = true;
-      }
-    }
-
-    // If we got good text, return it
-    if (fullText.trim().length > 100) {
-      return fullText;
-    }
-
-    // If text is minimal, it might be a scanned PDF
-    if (hasImages || fullText.trim().length < 100) {
-      console.log('PDF contains scanned images. Client-side OCR may be needed.');
-      return fullText || 'Unable to extract text from scanned PDF. Please use the image upload and OCR option.';
-    }
-
-    return fullText;
-  } catch (error) {
-    console.error('PDF text extraction failed:', error);
-    throw error;
   }
 }
 
