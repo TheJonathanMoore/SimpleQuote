@@ -1,0 +1,190 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+const PARSING_PROMPT = `You are an expert insurance document parser for construction projects. Your job is to extract ALL scope items from insurance documents and organize them by trade with COMPLETE accuracy.
+
+CRITICAL INSTRUCTIONS:
+1. Read the ENTIRE document carefully - do not skip any sections
+2. Extract EVERY SINGLE line item, no matter how small
+3. Look for items in tables, lists, appendices, and summary sections
+4. Also extract the deductible amount if mentioned in the document
+5. Extract insurance claim information:
+   - Claim number (usually labeled "Claim #", "Claim Number", etc.)
+   - Insurance claim adjuster name and email if available
+6. Common trade categories include but are not limited to:
+   - Roofing (tear-off, shingles, underlayment, ridge cap, valley metal, drip edge, ice & water shield, etc.)
+   - Gutters & Downspouts (gutters, downspouts, end caps, miters, hangers, etc.)
+   - Siding (removal, installation, trim, soffit, fascia, etc.)
+   - Windows & Doors
+   - Painting (exterior, interior, prep work, etc.)
+   - Decking/Framing
+   - Fencing
+   - Miscellaneous/General Conditions (permits, dumpster, cleanup, supervision, etc.)
+
+For each line item, extract:
+1. Quantity (number and unit, e.g., "120 LF", "45 SQ", "1 EA", "8 HR") - if no quantity listed, use "1 EA"
+2. Description (the complete work description exactly as written)
+3. RCV value (Replacement Cost Value in dollars - extract the number only, no symbols) - ALWAYS REQUIRED
+4. ACV value (Actual Cash Value in dollars - extract DIFFERENT value if available in document, NOT the same as RCV)
+
+IMPORTANT RCV vs ACV CLARIFICATION:
+- RCV (Replacement Cost Value) = the cost to replace the item as new
+- ACV (Actual Cash Value) = the RCV minus depreciation
+- ACV is typically LOWER than RCV due to depreciation
+- If document shows two different dollar amounts (one labeled RCV, one labeled ACV), extract both
+- If document only shows one amount, use that for RCV and LEAVE ACV FIELD EMPTY (do not duplicate RCV value)
+- Common patterns: RCV column and ACV column side-by-side, or two separate price lists, or depreciation percentages shown
+
+PARSING GUIDELINES:
+- If an item says "R&R" or "Remove and Replace", include the full description
+- Include labor AND material line items separately if listed
+- Extract unit prices and quantities separately (e.g., "10 SQ @ $350/SQ = $3,500" should show quantity "10 SQ")
+- Look for subtotals and line items under each trade section
+- Include allowances, overhead, profit if listed
+- Don't combine line items - keep each separate
+- Look for deductible information (typically stated as "$X deductible" or "Deductible: $X")
+- DO NOT extract sales tax, material tax, or any tax-related line items - only extract actual work/material items
+
+Output the result as a JSON object with this exact structure:
+
+{
+  "deductible": 0,
+  "claimNumber": "",
+  "claimAdjuster": {
+    "name": "",
+    "email": ""
+  },
+  "trades": [
+    {
+      "id": "unique-id-1",
+      "name": "Roof",
+      "checked": true,
+      "supplements": [],
+      "lineItems": [
+        {
+          "id": "unique-item-id-1",
+          "quantity": "1 EA",
+          "description": "Tear off existing shingles",
+          "rcv": 2500.00,
+          "acv": 1500.00,
+          "checked": true,
+          "notes": ""
+        },
+        {
+          "id": "unique-item-id-2",
+          "quantity": "45 SQ",
+          "description": "Install GAF Timberline HDZ shingles",
+          "rcv": 8500.00,
+          "checked": true,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "unique-id-2",
+      "name": "Gutters",
+      "checked": true,
+      "supplements": [],
+      "lineItems": [
+        {
+          "id": "unique-item-id-3",
+          "quantity": "120 LF",
+          "description": "Replace 5 inch K-style gutters",
+          "rcv": 1200.00,
+          "checked": true,
+          "notes": ""
+        }
+      ]
+    }
+  ]
+}
+
+Important rules:
+- All items should be checked: true by default
+- Use descriptive trade names (capitalize properly: "Roofing", "Gutters & Downspouts", etc.)
+- Parse RCV values carefully, removing any currency symbols or commas
+- Deductible: Extract as a number (e.g., 2500), default to 0 if not found
+- Generate unique IDs for trades and line items (use format: "trade-1", "trade-2", "item-1", "item-2", etc.)
+- Group related items logically by trade
+- If you can't determine the trade, use "Miscellaneous" or "General Conditions"
+- If the document has page numbers or references multiple pages, make sure to read ALL pages
+- Return ONLY the JSON, no additional text or explanation
+- COMPLETENESS IS CRITICAL: Extract every single line item from the document
+
+DOUBLE-CHECK before returning:
+- Did you read the entire document?
+- Did you extract items from all sections/pages?
+- Are all dollar amounts captured?
+- Did you include small items like nails, caulking, cleanup, etc.?
+- Did you find and extract the deductible amount?
+- Did you find the claim number?
+- Did you find the claim adjuster name and email?
+- CRITICAL: Did you extract DIFFERENT ACV values (not matching RCV) for items where available in the document?
+- If only one price was available per item, is ACV field omitted (not set equal to RCV)?
+- CRITICAL: Did you exclude all sales tax, material tax, and tax-related line items? Extract only actual work/material items.`;
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { fileData, fileName, mimeType } = body;
+
+    if (!fileData || !fileName) {
+      return NextResponse.json(
+        { error: 'Missing file data or file name' },
+        { status: 400 }
+      );
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: 'Gemini API key not configured' },
+        { status: 500 }
+      );
+    }
+
+    // Initialize Gemini model
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    // Prepare the file data for Gemini
+    const base64Data = fileData.includes(',')
+      ? fileData.split(',')[1]
+      : fileData;
+
+    const imagePart = {
+      inlineData: {
+        data: base64Data,
+        mimeType: mimeType || 'application/pdf',
+      },
+    };
+
+    // Send to Gemini for combined OCR + parsing
+    const response = await model.generateContent([
+      PARSING_PROMPT,
+      imagePart,
+    ]);
+
+    const result = response.response.text();
+
+    // Parse the JSON response
+    let jsonString = result.trim();
+
+    // Remove markdown code blocks if present
+    if (jsonString.startsWith('```')) {
+      jsonString = jsonString.replace(/^```[a-z]*\n/i, '');
+      jsonString = jsonString.replace(/\n```\s*$/, '');
+    }
+
+    const parsedResult = JSON.parse(jsonString.trim());
+
+    return NextResponse.json(parsedResult);
+  } catch (error) {
+    console.error('Gemini document processing error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return NextResponse.json(
+      { error: `Failed to process document: ${errorMessage}` },
+      { status: 500 }
+    );
+  }
+}

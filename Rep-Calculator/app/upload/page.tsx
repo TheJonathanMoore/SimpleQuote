@@ -17,6 +17,7 @@ interface JobNimbusCustomer {
 
 export default function UploadPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [insuranceText, setInsuranceText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -86,69 +87,49 @@ export default function UploadPage() {
     setShowSearchResults(false);
   };
 
-  const extractTextFromFile = async (fileToProcess: File): Promise<string> => {
-    setExtracting(true);
-    setExtractionStatus('Processing file...');
+  const processDocumentWithGemini = async (fileToProcess: File) => {
+    setExtractionStatus('Processing document with Gemini...');
 
     try {
-      const isPDF = fileToProcess.type === 'application/pdf' || fileToProcess.name.toLowerCase().endsWith('.pdf');
+      // Read file as base64
+      const reader = new FileReader();
+      const fileData = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(fileToProcess);
+      });
 
-      if (isPDF) {
-        // PDFs require manual text entry via Paste Text mode for best results
-        throw new Error('PDF extraction requires switching to Paste Text mode. Please copy and paste the insurance document text instead.');
-      } else {
-        // For images, use client-side OCR
-        return await extractTextFromImage(fileToProcess);
+      setExtractionStatus('Analyzing insurance document...');
+
+      // Determine MIME type
+      const mimeType = fileToProcess.type || 'application/pdf';
+
+      // Send to unified Gemini API for OCR + parsing
+      const response = await fetch('/api/process-document', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileData,
+          fileName: fileToProcess.name,
+          mimeType,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process document');
       }
-    } catch (err) {
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
       setExtractionStatus('');
-      throw err;
-    } finally {
-      setExtracting(false);
-    }
-  };
-
-  const extractTextFromImage = async (fileToProcess: File): Promise<string> => {
-    // Check if this is a PDF file - OCR can't process PDFs directly
-    if (fileToProcess.name.toLowerCase().endsWith('.pdf') || fileToProcess.type === 'application/pdf') {
-      throw new Error('OCR cannot process PDF files directly. Please use Paste Text mode to enter the text manually or try converting the PDF to an image first.');
-    }
-
-    // Import Tesseract dynamically (client-side only)
-    // @ts-ignore - dynamic import
-    const Tesseract = (await import('tesseract.js')).default;
-
-    setExtractionStatus(`Running OCR (${quality} quality)...`);
-
-    // Read file as image data
-    const reader = new FileReader();
-    const imageData = await new Promise<string>((resolve, reject) => {
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(fileToProcess);
-    });
-
-    // Create Tesseract worker
-    const worker = await Tesseract.createWorker('eng', 1);
-
-    try {
-      if (quality === 'better') {
-        // Better quality: higher accuracy settings
-        setExtractionStatus('Running OCR with enhanced accuracy...');
-        await worker.setParameters({
-          tessedit_pagesegmode: Tesseract.PSM.AUTO_OSD,
-          tessedit_ocr_engine_mode: Tesseract.OEM.LSTM_ONLY,
-        });
-      }
-
-      setExtractionStatus('Processing image...');
-      const result = await worker.recognize(imageData);
-      return result.data.text;
-    } finally {
-      await worker.terminate();
+      throw error;
     }
   };
 
@@ -167,35 +148,37 @@ export default function UploadPage() {
     setError('');
 
     try {
-      let textToRead = '';
+      let data;
 
       if (inputMode === 'file' && file) {
-        // Extract text from file first
-        textToRead = await extractTextFromFile(file);
+        // Process file with unified Gemini endpoint (OCR + parsing)
+        data = await processDocumentWithGemini(file);
       } else {
-        // Use text input directly
-        textToRead = insuranceText;
-      }
+        // For text mode, use Gemini text parsing
+        setExtractionStatus('Analyzing insurance document text with Gemini...');
 
-      // Now analyze the extracted/provided text
-      // Send directly to parse-scope API (no intermediate processing needed)
-      const formData = new FormData();
-      formData.append('text', textToRead);
+        const response = await fetch('/api/parse-text-with-gemini', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text: insuranceText }),
+        });
 
-      const response = await fetch('/api/parse-scope', {
-        method: 'POST',
-        body: formData,
-      });
+        setExtractionStatus('');
 
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        throw new Error('Server returned an invalid response. Please try again.');
-      }
+        let responseData;
+        try {
+          responseData = await response.json();
+        } catch {
+          throw new Error('Server returned an invalid response. Please try again.');
+        }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to parse insurance document');
+        if (!response.ok) {
+          throw new Error(responseData.error || 'Failed to parse insurance document');
+        }
+
+        data = responseData;
       }
 
       if (!data.trades || !Array.isArray(data.trades)) {
@@ -287,22 +270,79 @@ export default function UploadPage() {
 
             {inputMode === 'file' ? (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="insurance-file">Upload PDF</Label>
-                  <Input
-                    id="insurance-file"
-                    type="file"
-                    accept="application/pdf"
-                    onChange={handleFileChange}
-                    className="cursor-pointer"
-                    disabled={extracting}
-                  />
-                  {file && (
-                    <p className="text-sm text-muted-foreground">
-                      Selected: {file.name}
-                    </p>
-                  )}
+                {/* Hidden file input for click-to-upload */}
+                <input
+                  ref={fileInputRef}
+                  id="insurance-file"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={extracting}
+                />
+
+                {/* Drag and drop zone */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const droppedFiles = e.dataTransfer.files;
+                    if (droppedFiles.length > 0) {
+                      const droppedFile = droppedFiles[0];
+                      if (droppedFile.type === 'application/pdf' || droppedFile.name.toLowerCase().endsWith('.pdf')) {
+                        setFile(droppedFile);
+                        setError('');
+                      } else {
+                        setError('Please select a valid PDF file');
+                        setFile(null);
+                      }
+                    }
+                  }}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
+                    file
+                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                      : 'border-muted-foreground/50 hover:border-muted-foreground bg-muted/30 hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="text-3xl">📄</div>
+                    <div>
+                      <p className="text-base font-medium">
+                        {file ? 'File Ready' : 'Drag & Drop your PDF here'}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {file ? file.name : 'or click the button below'}
+                      </p>
+                    </div>
+                    {file && (
+                      <button
+                        onClick={() => {
+                          setFile(null);
+                          setError('');
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-700 underline"
+                      >
+                        Choose a different file
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Click to upload button */}
+                <Button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={extracting || file !== null}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                >
+                  📁 Choose PDF File
+                </Button>
 
                 <div className="space-y-2">
                   <Label>Extraction Quality</Label>

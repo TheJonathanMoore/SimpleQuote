@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { file: base64File, filename, related_id, attachment_type, description } = body;
 
-    // Convert base64 data URL to buffer
+    // Convert base64 data URL to clean base64 string
     let base64String = base64File;
 
     // Remove the "data:application/pdf;base64," prefix if present
@@ -15,30 +15,9 @@ export async function POST(request: NextRequest) {
       base64String = base64String.split(',')[1];
     }
 
-    const buffer = Buffer.from(base64String, 'base64');
-
-    // Save to temp directory
-    const tempDir = path.join(process.cwd(), 'tmp-pdfs');
-    try {
-      await fs.mkdir(tempDir, { recursive: true });
-    } catch {
-      // Directory might already exist
-    }
-
-    const timestamp = Date.now();
-    const safeFilename = filename.replace(/[^a-z0-9.-]/gi, '_').toLowerCase();
-    const filepath = path.join(tempDir, `${timestamp}_${safeFilename}`);
-
-    await fs.writeFile(filepath, buffer);
-    console.log(`PDF saved to: ${filepath}`);
-
-    // Get the file URL (assuming the app is publicly accessible)
-    // For local development, this might not work. You may need to use a cloud storage solution.
-    const fileUrl = `${process.env.APP_URL || 'http://localhost:3000'}/api/get-pdf/${timestamp}/${safeFilename}`;
-
-    // Prepare payload for Zapier with file URL instead of base64
+    // Prepare payload for Zapier with base64 file content directly
     const zapierPayload = {
-      file: fileUrl,
+      file: base64String,
       filename,
       related_id,
       attachment_type,
@@ -48,7 +27,11 @@ export async function POST(request: NextRequest) {
     // Forward to Zapier webhook
     const zapierWebhookUrl = 'https://hooks.zapier.com/hooks/catch/24628620/u8ekbpf/';
 
-    console.log('Forwarding to Zapier webhook with file URL...');
+    console.log('Forwarding to Zapier webhook with base64 PDF content...');
+    console.log('Filename:', filename);
+    console.log('Related ID (JNID):', related_id);
+    console.log('Attachment Type:', attachment_type);
+    console.log('Description:', description);
 
     const response = await fetch(zapierWebhookUrl, {
       method: 'POST',
@@ -62,7 +45,7 @@ export async function POST(request: NextRequest) {
       const errorText = await response.text();
       console.error('Zapier webhook error:', errorText);
       return NextResponse.json(
-        { error: `Zapier webhook failed: ${response.status}` },
+        { error: `Zapier webhook failed: ${response.status} - ${errorText}` },
         { status: response.status }
       );
     }
@@ -72,7 +55,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Document sent to JobNimbus via Zapier',
-      fileUrl,
+      filename,
+      related_id,
     });
   } catch (error) {
     console.error('Error sending to Zapier:', error);
