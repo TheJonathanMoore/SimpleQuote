@@ -430,10 +430,11 @@ export default function SummaryPage() {
         yPosition += 3;
       }
 
+      pdf.setFontSize(8);
       pdf.text(`Generated: ${new Date().toLocaleDateString()}`, margin, pageHeight - 5, {
         align: 'left',
-        fontSize: 8,
       });
+      pdf.setFontSize(12);
 
       // Convert PDF to blob
       const pdfBlob = pdf.output('blob');

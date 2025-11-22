@@ -1,6 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
-import pdf from 'pdf-parse-fork';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -131,35 +130,16 @@ DOUBLE-CHECK before returning:
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get('file') as File | null;
     const text = formData.get('text') as string | null;
 
-    let extractedText: string;
-
-    if (file) {
-      // Extract text from PDF using pdf-parse
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      try {
-        const pdfData = await pdf(buffer);
-        extractedText = pdfData.text;
-
-        if (!extractedText || extractedText.trim().length === 0) {
-          throw new Error('No text could be extracted from the PDF. The file may be scanned or image-based.');
-        }
-      } catch (pdfError) {
-        console.error('PDF extraction error:', pdfError);
-        throw new Error('Failed to extract text from PDF. Please try pasting the text directly instead.');
-      }
-    } else if (text) {
-      extractedText = text;
-    } else {
+    if (!text || text.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Either file or text is required' },
+        { error: 'Text content is required' },
         { status: 400 }
       );
     }
+
+    const extractedText = text;
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',

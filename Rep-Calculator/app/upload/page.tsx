@@ -20,15 +20,18 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [insuranceText, setInsuranceText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractionStatus, setExtractionStatus] = useState('');
   const [error, setError] = useState('');
   const [inputMode, setInputMode] = useState<'file' | 'text'>('file');
+  const [quality, setQuality] = useState<'fast' | 'better'>('better');
   const [selectedRep, setSelectedRep] = useState('Colin Black');
   const [customerSearch, setCustomerSearch] = useState('');
   const [searchResults, setSearchResults] = useState<JobNimbusCustomer[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<JobNimbusCustomer | null>(null);
   const [searching, setSearching] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -83,6 +86,114 @@ export default function UploadPage() {
     setShowSearchResults(false);
   };
 
+  const extractTextFromFile = async (fileToProcess: File): Promise<string> => {
+    setExtracting(true);
+    setExtractionStatus('Extracting text from document...');
+
+    try {
+      const isPDF = fileToProcess.type === 'application/pdf' || fileToProcess.name.toLowerCase().endsWith('.pdf');
+
+      if (isPDF) {
+        // For PDFs, use server-side extraction
+        return await extractTextFromPDF(fileToProcess);
+      } else {
+        // For images, use client-side OCR
+        return await extractTextFromImage(fileToProcess);
+      }
+    } catch (err) {
+      setExtractionStatus('');
+      throw err;
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const extractTextFromPDF = async (fileToProcess: File): Promise<string> => {
+    // Read file as base64
+    const reader = new FileReader();
+    const base64Promise = new Promise<string>((resolve, reject) => {
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result);
+      };
+      reader.onerror = reject;
+    });
+
+    reader.readAsDataURL(fileToProcess);
+    const base64File = await base64Promise;
+
+    // Call extraction API
+    const extractResponse = await fetch('/api/extract-text', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        file: base64File,
+        filename: fileToProcess.name,
+      }),
+    });
+
+    if (!extractResponse.ok) {
+      const errorData = await extractResponse.json();
+      throw new Error(errorData.error || 'Failed to extract text from PDF');
+    }
+
+    const extractedData = await extractResponse.json();
+
+    if (!extractedData.success && extractedData.requiresOCR) {
+      // Scanned PDF - switch to OCR
+      setExtractionStatus('PDF is scanned. Switching to OCR...');
+      return await extractTextFromImage(fileToProcess);
+    }
+
+    if (!extractedData.text) {
+      throw new Error('No text could be extracted from the document');
+    }
+
+    return extractedData.text;
+  };
+
+  const extractTextFromImage = async (fileToProcess: File): Promise<string> => {
+    // Import Tesseract dynamically (client-side only)
+    // @ts-ignore - dynamic import
+    const Tesseract = (await import('tesseract.js')).default;
+
+    setExtractionStatus(`Running OCR (${quality} quality)...`);
+
+    // Read file as image data
+    const reader = new FileReader();
+    const imageData = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result);
+      };
+      reader.onerror = reject;
+    });
+
+    reader.readAsDataURL(fileToProcess);
+
+    // Create Tesseract worker
+    const worker = await Tesseract.createWorker('eng', 1);
+
+    try {
+      if (quality === 'better') {
+        // Better quality: higher accuracy settings
+        setExtractionStatus('Running OCR with enhanced accuracy...');
+        await worker.setParameters({
+          tessedit_pagesegmode: Tesseract.PSM.AUTO_OSD,
+          tessedit_ocr_engine_mode: Tesseract.OEM.LSTM_ONLY,
+        });
+      }
+
+      setExtractionStatus('Processing image...');
+      const result = await worker.recognize(imageData);
+      return result.data.text;
+    } finally {
+      await worker.terminate();
+    }
+  };
+
   const handleParse = async () => {
     if (inputMode === 'file' && !file) {
       setError('Please upload a PDF file');
@@ -98,13 +209,19 @@ export default function UploadPage() {
     setError('');
 
     try {
-      const formData = new FormData();
+      let textToParse = '';
 
       if (inputMode === 'file' && file) {
-        formData.append('file', file);
+        // Extract text from file first
+        textToParse = await extractTextFromFile(file);
       } else {
-        formData.append('text', insuranceText);
+        // Use text input directly
+        textToParse = insuranceText;
       }
+
+      // Now parse the extracted/provided text
+      const formData = new FormData();
+      formData.append('text', textToParse);
 
       const response = await fetch('/api/parse-scope', {
         method: 'POST',
@@ -210,19 +327,63 @@ export default function UploadPage() {
             </div>
 
             {inputMode === 'file' ? (
-              <div className="space-y-2">
-                <Label htmlFor="insurance-file">Upload PDF</Label>
-                <Input
-                  id="insurance-file"
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileChange}
-                  className="cursor-pointer"
-                />
-                {file && (
-                  <p className="text-sm text-muted-foreground">
-                    Selected: {file.name}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="insurance-file">Upload PDF</Label>
+                  <Input
+                    id="insurance-file"
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handleFileChange}
+                    className="cursor-pointer"
+                    disabled={extracting}
+                  />
+                  {file && (
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {file.name}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Extraction Quality</Label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="quality"
+                        value="fast"
+                        checked={quality === 'fast'}
+                        onChange={(e) => setQuality(e.target.value as 'fast' | 'better')}
+                        disabled={extracting}
+                        className="cursor-pointer"
+                      />
+                      <span className="text-sm">Fast (Basic)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="quality"
+                        value="better"
+                        checked={quality === 'better'}
+                        onChange={(e) => setQuality(e.target.value as 'fast' | 'better')}
+                        disabled={extracting}
+                        className="cursor-pointer"
+                      />
+                      <span className="text-sm">Better (Recommended)</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {quality === 'fast'
+                      ? 'Fast mode: Quick text extraction, good for printed documents'
+                      : 'Better mode: Advanced OCR, better accuracy for scanned documents'}
                   </p>
+                </div>
+
+                {extractionStatus && (
+                  <div className="text-sm text-blue-600">
+                    {extractionStatus}
+                  </div>
                 )}
               </div>
             ) : (
@@ -296,11 +457,11 @@ export default function UploadPage() {
 
             <Button
               onClick={handleParse}
-              disabled={loading}
+              disabled={loading || extracting}
               className="w-full"
               size="lg"
             >
-              {loading ? 'Parsing...' : 'Parse Document'}
+              {extracting ? 'Extracting text...' : loading ? 'Parsing...' : 'Parse Document'}
             </Button>
           </CardContent>
         </Card>
